@@ -1,0 +1,34 @@
+[project]
+name = "github-inbox-watch"
+version = "0.1.0"
+description = "Local Waybar-friendly watcher for activity on GitHub issues and PRs authored by you."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Logan Saether" }]
+keywords = ["github", "waybar", "notifications", "linux"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Desktop Environment",
+  "Topic :: Software Development :: Version Control :: Git",
+]
+
+dependencies = []
+
+[project.scripts]
+github-inbox-watch = "github_inbox_watch.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/github_inbox_watch"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

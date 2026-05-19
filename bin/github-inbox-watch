@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+repo_dir="$(cd "$(dirname "$script_path")/.." && pwd)"
+if [[ -n "${PYTHONPATH:-}" ]]; then
+  export PYTHONPATH="$repo_dir/src:$PYTHONPATH"
+else
+  export PYTHONPATH="$repo_dir/src"
+fi
+exec python -m github_inbox_watch.cli "$@"
