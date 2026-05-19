@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path
@@ -200,6 +201,52 @@ def command_mark_seen(args: argparse.Namespace) -> int:
     return 0
 
 
+def status_summary(state: dict[str, Any]) -> dict[str, Any]:
+    """Return a stable local status summary for humans and scripts."""
+
+    threads = state.get("threads") or {}
+    selected_thread = newest_thread(state, unseen_only=True) or newest_thread(state)
+    selected_label = None
+    if selected_thread is not None:
+        selected_label = "unseen" if selected_thread.get("unseen") else "latest"
+    return {
+        "unseen_count": int(state.get("unseen_count") or 0),
+        "tracked_count": len(threads),
+        "last_poll_at": state.get("last_poll_at"),
+        "last_error": state.get("last_error"),
+        "selected_label": selected_label,
+        "selected_thread": selected_thread,
+    }
+
+
+def command_status(args: argparse.Namespace) -> int:
+    """Print a local state summary without talking to GitHub."""
+
+    summary = status_summary(load_state(args.state_path))
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+
+    print(f"{summary['unseen_count']} unseen; {summary['tracked_count']} tracked")
+    if summary["last_poll_at"]:
+        print(f"last poll: {summary['last_poll_at']}")
+    if summary["last_error"]:
+        print(f"last error: {summary['last_error']}")
+
+    thread = summary["selected_thread"]
+    if thread is not None:
+        kind = thread.get("kind") or "item"
+        repo = thread.get("repo") or "unknown/repo"
+        number = thread.get("number") or "?"
+        title = thread.get("title") or "untitled"
+        print(f"{summary['selected_label']}: {kind} {repo}#{number} {title}")
+        if thread.get("updated_at"):
+            print(f"updated: {thread['updated_at']}")
+        if thread.get("url"):
+            print(str(thread["url"]))
+    return 0
+
+
 def _open_url(url: str) -> None:
     opener = os.environ.get("BROWSER")
     if opener:
@@ -302,6 +349,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     mark = sub.add_parser("mark-seen", help="Mark all current unseen items as seen")
     mark.set_defaults(func=command_mark_seen)
+
+    status = sub.add_parser("status", help="Print local inbox-watch state without network calls")
+    status.add_argument("--json", action="store_true", help="Print a machine-readable status summary")
+    status.set_defaults(func=command_status)
 
     reset = sub.add_parser("reset", help="Delete state/cache files")
     reset.set_defaults(func=command_reset)

@@ -1,8 +1,11 @@
+from contextlib import redirect_stdout
+from io import StringIO
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from github_inbox_watch.cli import inbox_query_for_owner, inbox_url_for_owner, poll_once
+from github_inbox_watch.cli import inbox_query_for_owner, inbox_url_for_owner, main, poll_once
 
 
 class DummyClient:
@@ -93,6 +96,90 @@ class CliPollTests(unittest.TestCase):
             set(state["threads"]),
             {"thread-1", "search:issue:example-user/example-repo#22"},
         )
+
+
+class CliStatusTests(unittest.TestCase):
+    def run_status(self, tmpdir: str, *extra_args: str) -> tuple[int, str]:
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = main(
+                [
+                    "--state-path",
+                    str(Path(tmpdir) / "state.json"),
+                    "--cache-path",
+                    str(Path(tmpdir) / "cache.json"),
+                    "status",
+                    *extra_args,
+                ]
+            )
+        return code, stdout.getvalue()
+
+    def write_state(self, tmpdir: str) -> None:
+        state = {
+            "version": 1,
+            "threads": {
+                "thread-older": {
+                    "thread_id": "thread-older",
+                    "repo": "owner/repo",
+                    "number": 122,
+                    "title": "Older update",
+                    "url": "https://github.com/owner/repo/issues/122",
+                    "kind": "issue",
+                    "updated_at": "2026-05-18T13:00:00Z",
+                    "seen_at": "2026-05-18T13:00:00Z",
+                    "unseen": False,
+                },
+                "thread-newer": {
+                    "thread_id": "thread-newer",
+                    "repo": "owner/repo",
+                    "number": 123,
+                    "title": "New review comment",
+                    "url": "https://github.com/owner/repo/pull/123",
+                    "kind": "pr",
+                    "updated_at": "2026-05-19T22:00:00Z",
+                    "seen_at": "2026-05-19T21:00:00Z",
+                    "unseen": True,
+                },
+            },
+            "unseen_count": 1,
+            "last_poll_at": "2026-05-19T22:01:00Z",
+            "last_error": None,
+            "search_baseline_at": None,
+        }
+        Path(tmpdir, "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    def test_status_reports_empty_local_state_without_network(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, output = self.run_status(tmpdir)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(output, "0 unseen; 0 tracked\n")
+
+    def test_status_reports_current_unseen_thread_summary(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.write_state(tmpdir)
+            code, output = self.run_status(tmpdir)
+
+        self.assertEqual(code, 0)
+        self.assertIn("1 unseen; 2 tracked", output)
+        self.assertIn("last poll: 2026-05-19T22:01:00Z", output)
+        self.assertIn("unseen: pr owner/repo#123 New review comment", output)
+        self.assertIn("updated: 2026-05-19T22:00:00Z", output)
+        self.assertIn("https://github.com/owner/repo/pull/123", output)
+
+    def test_status_json_outputs_stable_summary_schema(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.write_state(tmpdir)
+            code, output = self.run_status(tmpdir, "--json")
+
+        self.assertEqual(code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["unseen_count"], 1)
+        self.assertEqual(payload["tracked_count"], 2)
+        self.assertEqual(payload["last_poll_at"], "2026-05-19T22:01:00Z")
+        self.assertIsNone(payload["last_error"])
+        self.assertEqual(payload["selected_label"], "unseen")
+        self.assertEqual(payload["selected_thread"]["thread_id"], "thread-newer")
 
 
 if __name__ == "__main__":

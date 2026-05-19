@@ -79,6 +79,7 @@ github-inbox-watch --help
 github-inbox-watch daemon
 github-inbox-watch poll-once
 github-inbox-watch waybar
+github-inbox-watch status
 github-inbox-watch inbox
 github-inbox-watch open
 github-inbox-watch mark-seen
@@ -91,6 +92,7 @@ Useful options:
 github-inbox-watch --owner YOUR_GITHUB_LOGIN poll-once
 github-inbox-watch --poll-interval 30 daemon
 github-inbox-watch --include-authored-search poll-once
+github-inbox-watch status --json
 github-inbox-watch --owner YOUR_GITHUB_LOGIN inbox --print-only
 github-inbox-watch open --print-only
 ```
@@ -118,6 +120,15 @@ Waybar cache:
 ```
 
 First run bootstraps current matching notification threads as seen, so you do not get a giant initial backlog. Later updates become unseen until you run `mark-seen`. State also stores `search_baseline_at` when the optional authored-search fallback is enabled; that prevents the fallback from surfacing old backlog when it first starts tracking more items than the notifications API returned.
+
+To inspect that local state without polling GitHub or opening a browser, run:
+
+```bash
+github-inbox-watch status
+github-inbox-watch status --json
+```
+
+`status` prints the unseen/tracked counts, last poll/error metadata when present, and the current unseen item or latest tracked item. The JSON mode emits the same summary fields for scripts.
 
 ## Waybar
 
