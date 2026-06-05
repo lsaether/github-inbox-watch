@@ -48,6 +48,29 @@ class WaybarTests(unittest.TestCase):
         self.assertTrue(payload["tooltip"].splitlines()[0].startswith("owner/repo#2"))
         json.dumps(payload)
 
+    def test_waybar_tooltip_item_limit_is_configurable(self):
+        state = empty_state()
+        state["threads"] = {
+            f"t{idx}": {
+                "thread_id": f"t{idx}",
+                "repo": "owner/repo",
+                "number": idx,
+                "title": f"Item {idx}",
+                "url": f"https://github.com/owner/repo/issues/{idx}",
+                "kind": "issue",
+                "updated_at": f"2026-05-18T1{idx}:00:00Z",
+                "seen_at": "2026-05-18T10:00:00Z",
+                "unseen": True,
+            }
+            for idx in range(1, 4)
+        }
+        state["unseen_count"] = 3
+
+        payload = build_waybar_payload(state, max_tooltip_items=1)
+
+        self.assertEqual(payload["text"], " 3")
+        self.assertEqual(payload["tooltip"].splitlines(), ["owner/repo#3 — Item 3", "…and 2 more"])
+
     def test_waybar_error_payload_preserves_error_signal(self):
         state = empty_state()
         state["last_error"] = "gh failed"

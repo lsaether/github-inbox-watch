@@ -92,6 +92,7 @@ Useful options:
 github-inbox-watch --owner YOUR_GITHUB_LOGIN poll-once
 github-inbox-watch --poll-interval 30 daemon
 github-inbox-watch --include-authored-search poll-once
+github-inbox-watch --max-tooltip-items 4 poll-once
 github-inbox-watch status --json
 github-inbox-watch --owner YOUR_GITHUB_LOGIN inbox --print-only
 github-inbox-watch open --print-only
@@ -103,6 +104,7 @@ You can also set:
 export GITHUB_INBOX_WATCH_OWNER=YOUR_GITHUB_LOGIN
 export GITHUB_INBOX_WATCH_INTERVAL=30
 export GITHUB_INBOX_WATCH_INCLUDE_AUTHORED_SEARCH=1
+export GITHUB_INBOX_WATCH_MAX_TOOLTIP_ITEMS=8
 ```
 
 ## Local state
@@ -152,7 +154,9 @@ Display states:
  !    last poll had an error
 ```
 
-The tooltip lists the newest unseen items.
+The tooltip lists the newest unseen items. Limit the number of listed items with
+`--max-tooltip-items` or `GITHUB_INBOX_WATCH_MAX_TOOLTIP_ITEMS`; extra unseen
+items are summarized as `…and N more`.
 
 Left-clicking the Waybar module should usually open GitHub Notifications with
 the closest native inbox filter for the watcher:

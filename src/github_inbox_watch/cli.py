@@ -26,11 +26,35 @@ from .state import (
     save_state,
     write_json_atomic,
 )
-from .waybar import build_waybar_payload, dumps_waybar_payload
+from .waybar import (
+    DEFAULT_MAX_TOOLTIP_ITEMS,
+    build_waybar_payload,
+    dumps_waybar_payload,
+)
 
 
 class PollError(RuntimeError):
     """Raised when a poll fails after state/cache are updated with error info."""
+
+
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a non-negative integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+    return parsed
+
+
+def _default_max_tooltip_items() -> int:
+    raw = os.environ.get("GITHUB_INBOX_WATCH_MAX_TOOLTIP_ITEMS")
+    if not raw:
+        return DEFAULT_MAX_TOOLTIP_ITEMS
+    try:
+        return _non_negative_int(raw)
+    except argparse.ArgumentTypeError:
+        return DEFAULT_MAX_TOOLTIP_ITEMS
 
 
 def _parse_github_time(value: str) -> datetime:
@@ -89,8 +113,16 @@ def inbox_url_for_owner(owner: str) -> str:
     return "https://github.com/notifications?" + urlencode({"query": inbox_query_for_owner(owner)})
 
 
-def write_cache(cache_path: Path, state: dict[str, Any]) -> None:
-    write_json_atomic(cache_path, build_waybar_payload(state))
+def write_cache(
+    cache_path: Path,
+    state: dict[str, Any],
+    *,
+    max_tooltip_items: int = DEFAULT_MAX_TOOLTIP_ITEMS,
+) -> None:
+    write_json_atomic(
+        cache_path,
+        build_waybar_payload(state, max_tooltip_items=max_tooltip_items),
+    )
 
 
 def poll_once(
@@ -100,6 +132,7 @@ def poll_once(
     owner: str | None = None,
     client: GhClient | None = None,
     include_authored_search: bool = False,
+    max_tooltip_items: int = DEFAULT_MAX_TOOLTIP_ITEMS,
 ) -> dict[str, Any]:
     """Poll GitHub once, update state/cache, and return the new state."""
 
@@ -135,14 +168,14 @@ def poll_once(
             new_item_baseline_at=search_baseline_at,
         )
         save_state(state_path, result.state)
-        write_cache(cache_path, result.state)
+        write_cache(cache_path, result.state, max_tooltip_items=max_tooltip_items)
         return result.state
     except Exception as exc:  # noqa: BLE001 - CLI should preserve old state on all poll errors.
         error_state = empty_state()
         error_state.update(state)
         error_state["last_error"] = str(exc)
         save_state(state_path, error_state)
-        write_cache(cache_path, error_state)
+        write_cache(cache_path, error_state, max_tooltip_items=max_tooltip_items)
         raise PollError(str(exc)) from exc
 
 
@@ -156,6 +189,7 @@ def command_daemon(args: argparse.Namespace) -> int:
                 owner=args.owner,
                 client=client,
                 include_authored_search=args.include_authored_search,
+                max_tooltip_items=args.max_tooltip_items,
             )
             print(
                 f"poll ok: {state.get('unseen_count', 0)} unseen, "
@@ -175,6 +209,7 @@ def command_poll_once(args: argparse.Namespace) -> int:
             owner=args.owner,
             client=GhClient(args.gh_binary),
             include_authored_search=args.include_authored_search,
+            max_tooltip_items=args.max_tooltip_items,
         )
     except PollError as exc:
         print(f"poll error: {exc}", file=sys.stderr)
@@ -187,7 +222,7 @@ def command_waybar(args: argparse.Namespace) -> int:
     if args.cache_path.exists():
         print(args.cache_path.read_text(encoding="utf-8").strip())
         return 0
-    print(dumps_waybar_payload(load_state(args.state_path)))
+    print(dumps_waybar_payload(load_state(args.state_path), max_tooltip_items=args.max_tooltip_items))
     return 0
 
 
@@ -196,7 +231,7 @@ def command_mark_seen(args: argparse.Namespace) -> int:
     before = int(state.get("unseen_count") or 0)
     state = mark_seen(state)
     save_state(args.state_path, state)
-    write_cache(args.cache_path, state)
+    write_cache(args.cache_path, state, max_tooltip_items=args.max_tooltip_items)
     print(f"marked {before} item(s) seen")
     return 0
 
@@ -319,6 +354,15 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
         default=os.environ.get("GITHUB_INBOX_WATCH_INCLUDE_AUTHORED_SEARCH", "").lower()
         in {"1", "true", "yes", "on"},
         help="Also search open authored issues/PRs. Off by default so GitHub notifications remain source of truth.",
+    )
+    parser.add_argument(
+        "--max-tooltip-items",
+        type=_non_negative_int,
+        default=_default_max_tooltip_items(),
+        help=(
+            "Maximum unseen items to include in the generated Waybar tooltip "
+            "(env: GITHUB_INBOX_WATCH_MAX_TOOLTIP_ITEMS; default: 8)."
+        ),
     )
 
 

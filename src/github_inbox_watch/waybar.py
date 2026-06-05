@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 GITHUB_ICON = ""
+DEFAULT_MAX_TOOLTIP_ITEMS = 8
 
 
 def _sorted_unseen_threads(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -17,7 +18,11 @@ def _sorted_unseen_threads(state: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(threads, key=lambda thread: thread.get("updated_at") or "", reverse=True)
 
 
-def build_waybar_payload(state: dict[str, Any], *, max_tooltip_items: int = 8) -> dict[str, str]:
+def build_waybar_payload(
+    state: dict[str, Any],
+    *,
+    max_tooltip_items: int = DEFAULT_MAX_TOOLTIP_ITEMS,
+) -> dict[str, str]:
     """Build a Waybar custom module JSON payload."""
 
     last_error = state.get("last_error")
@@ -37,8 +42,9 @@ def build_waybar_payload(state: dict[str, Any], *, max_tooltip_items: int = 8) -
             "tooltip": "No new activity on open authored GitHub issues/PRs.",
         }
 
+    max_items = max(0, int(max_tooltip_items))
     lines = []
-    for thread in unseen[:max_tooltip_items]:
+    for thread in unseen[:max_items]:
         repo = thread.get("repo", "unknown/repo")
         number = thread.get("number", "?")
         title = thread.get("title", "Untitled")
@@ -53,5 +59,9 @@ def build_waybar_payload(state: dict[str, Any], *, max_tooltip_items: int = 8) -
     }
 
 
-def dumps_waybar_payload(state: dict[str, Any]) -> str:
-    return json.dumps(build_waybar_payload(state), ensure_ascii=False)
+def dumps_waybar_payload(
+    state: dict[str, Any],
+    *,
+    max_tooltip_items: int = DEFAULT_MAX_TOOLTIP_ITEMS,
+) -> str:
+    return json.dumps(build_waybar_payload(state, max_tooltip_items=max_tooltip_items), ensure_ascii=False)
